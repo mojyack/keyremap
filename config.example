@@ -1,0 +1,12 @@
+# "device {device name}"
+# declare name of virtual device
+device "Middle buttonn simulator"
+
+# "capture {device name}"
+# name of event source devices
+capture "TK-FBP043 Series"
+capture "TPPS/2 IBM TrackPoint"
+
+# "map {capture number} {from code} {to code}" 
+# this line means: "if 0th device(i.e. TK-FBP043 Series) emits key_leftalt, convert it to btn_middle"
+map 0 key_leftalt btn_middle
