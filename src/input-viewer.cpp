@@ -1,7 +1,6 @@
 #include <linux/uinput.h>
 #include <unistd.h>
 
-#include "keycodes.hpp"
 #include "uinput.hpp"
 
 auto view_inputs(const char* const path) -> int {
@@ -21,18 +20,7 @@ loop:
         printf("SYN\n");
         break;
     case EV_KEY:
-        printf("KEY %s ", code2str(event.code));
-        switch(event.value) {
-        case 0:
-            printf("up\n");
-            break;
-        case 1:
-            printf("down\n");
-            break;
-        case 2:
-            printf("repeat\n");
-            break;
-        }
+        printf("KEY\n");
         break;
     case EV_REL:
         printf("REL\n");
