@@ -5,9 +5,9 @@ src = files(
   'src/config.cpp',
 )
 
-src = files(
+viewer_src = files(
   'src/input-viewer.cpp',
 )
 
 executable('keyremap', src, install : true)
-executable('input-viewer', src, install : true)
+executable('input-viewer', viewer_src, install : true)
