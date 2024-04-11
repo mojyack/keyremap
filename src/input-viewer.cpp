@@ -13,7 +13,8 @@ loop:
         return 1;
     }
 
-    printf("[%ld] ", event.time.tv_sec);
+    printf("[%ld.%ld] %d %d %d\n", event.time.tv_sec, event.time.tv_usec, event.type, event.code, event.value);
+
     switch(event.type) {
     case EV_SYN:
         printf("SYN\n");
