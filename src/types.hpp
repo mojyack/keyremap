@@ -2,11 +2,6 @@
 #include <thread>
 #include <vector>
 
-struct InputDeviceInfo {
-    std::string file_path;
-    std::string name;
-};
-
 struct KeyMap {
     int16_t from;
     int16_t to;

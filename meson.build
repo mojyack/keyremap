@@ -3,10 +3,12 @@ project('keyremap', 'cpp', version: '1.0.0', default_options : ['warning_level=3
 src = files(
   'src/main.cpp',
   'src/config.cpp',
+  'src/uinput.cpp',
 )
 
 viewer_src = files(
   'src/input-viewer.cpp',
+  'src/uinput.cpp',
 )
 
 executable('keyremap', src, install : true)

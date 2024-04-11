@@ -1,10 +1,11 @@
+#include <linux/uinput.h>
 #include <unistd.h>
 
 #include "keycodes.hpp"
 #include "uinput.hpp"
 
 auto view_inputs(const char* const path) -> int {
-    const auto fd = unwrap(open_uinput_device(path, false));
+    const auto fd = open_uinput_device(path, false).unwrap();
 
     auto event = input_event();
 loop:

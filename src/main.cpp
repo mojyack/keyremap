@@ -1,5 +1,4 @@
-
-#include <sys/ioctl.h>
+#include <linux/uinput.h>
 #include <unistd.h>
 
 #include "config.hpp"
@@ -30,11 +29,14 @@ loop:
 }
 
 auto run(const ConfigFile config) -> int {
-    auto devices = std::vector<Device>();
+    auto device_fds = std::vector<int>();
+    auto devices    = std::vector<Device>();
     for(const auto& d : enumerate_devices()) {
         for(auto citer = size_t(0); citer < config.captures.size(); citer += 1) {
             if(config.captures[citer] == d.name) {
-                auto& dev = devices.emplace_back(Device{.fd = unwrap(open_uinput_device(d.file_path.data()))});
+                const auto fd = open_uinput_device(d.file_path.data()).unwrap();
+                device_fds.push_back(fd);
+                auto& dev = devices.emplace_back(Device{.fd = fd});
                 for(auto& m : config.maps) {
                     if(size_t(m.device) == citer) {
                         dev.maps.push_back(m.key);
@@ -44,7 +46,7 @@ auto run(const ConfigFile config) -> int {
             }
         }
     }
-    const auto vdev = unwrap(create_virtual_device(devices, config.device_name.data()));
+    const auto vdev = create_virtual_device(device_fds, config.device_name.data()).unwrap();
     for(auto& dev : devices) {
         dev.worker = std::thread(input_watcher_main, dev.fd, vdev, dev.maps);
     }
