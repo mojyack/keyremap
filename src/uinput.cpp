@@ -75,7 +75,7 @@ auto open_uinput_device(const char* const path, bool grab) -> Result<int> {
     return fd;
 }
 
-auto create_virtual_device(const std::span<int> parent_device_fds, const char* const device_name) -> Result<int> {
+auto configure_virtual_device(const std::span<int> parent_device_fds) -> Result<int> {
     const auto fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
     if(fd == -1) {
         return Error(build_string("open(/dev/uinput) failed: ", errno));
@@ -84,7 +84,7 @@ auto create_virtual_device(const std::span<int> parent_device_fds, const char* c
     for(const auto pfd : parent_device_fds) {
         const auto events = get_uinput_device_event_bits<0, EV_MAX>(pfd).unwrap();
 
-        auto inherit_all_events = [fd, pfd, &events]<int event, size_t max, int setbit>() -> void {
+        auto inherit_all_events = [ fd, pfd, &events ]<int event, size_t max = 0, int setbit = 0>()->void {
             if(!check_bit(events, event)) {
                 return;
             }
@@ -101,19 +101,22 @@ auto create_virtual_device(const std::span<int> parent_device_fds, const char* c
             }
         };
 
-        inherit_all_events.template operator()<EV_SYN, 0, 0>();
+        inherit_all_events.template operator()<EV_SYN>();
         inherit_all_events.template operator()<EV_KEY, KEY_MAX, UI_SET_KEYBIT>();
         inherit_all_events.template operator()<EV_REL, REL_MAX, UI_SET_RELBIT>();
         inherit_all_events.template operator()<EV_MSC, MSC_MAX, UI_SET_MSCBIT>();
         inherit_all_events.template operator()<EV_SW, SW_MAX, UI_SET_SWBIT>();
         inherit_all_events.template operator()<EV_LED, LED_MAX, UI_SET_LEDBIT>();
         inherit_all_events.template operator()<EV_SND, SND_MAX, UI_SET_SNDBIT>();
-        inherit_all_events.template operator()<EV_REP, 0, 0>();
+        inherit_all_events.template operator()<EV_REP>();
         inherit_all_events.template operator()<EV_FF, FF_MAX, UI_SET_FFBIT>();
-        inherit_all_events.template operator()<EV_PWR, 0, 0>();
-        inherit_all_events.template operator()<EV_FF_STATUS, 0, 0>();
+        inherit_all_events.template operator()<EV_PWR>();
+        inherit_all_events.template operator()<EV_FF_STATUS>();
     }
+    return fd;
+}
 
+auto create_virtual_device(const int fd, const char* const device_name) -> void {
     auto setup = uinput_setup{
         .id = {
             .bustype = BUS_USB,
@@ -127,5 +130,4 @@ auto create_virtual_device(const std::span<int> parent_device_fds, const char* c
 
     dynamic_assert(ioctl(fd, UI_DEV_SETUP, &setup) == 0, "ioctl() failed");
     dynamic_assert(ioctl(fd, UI_DEV_CREATE) == 0, "ioctl() failed");
-    return fd;
 }

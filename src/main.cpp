@@ -69,7 +69,25 @@ auto run(ConfigFile config) -> int {
             }
         }
     }
-    const auto vdev = create_virtual_device(device_fds, config.device_name.data()).unwrap();
+
+    // create virtual device
+    const auto vdev = configure_virtual_device(device_fds).unwrap();
+    // virtual device is keyboard
+    dynamic_assert(ioctl(vdev, UI_SET_EVBIT, EV_KEY) == 0, "ioctl() failed");
+    // enable all possible keycodes
+    for(auto& dev : devices) {
+        for(const auto& map : dev.maps) {
+            for(const auto& bind : map) {
+                if(ioctl(vdev, UI_SET_KEYBIT, bind.rewrite_code) != 0) {
+                    print("failed to enable keycode ", bind.rewrite_code);
+                }
+            }
+        }
+    }
+    // instantiate virtual device
+    create_virtual_device(vdev, config.device_name.data());
+
+    // start workers
     for(auto& dev : devices) {
         dev.worker = std::thread(input_watcher_main, dev.fd, vdev, dev.maps);
     }
