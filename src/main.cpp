@@ -3,7 +3,6 @@
 #include <unistd.h>
 
 #include "config.hpp"
-#include "logger.hpp"
 #include "uinput.hpp"
 
 auto input_watcher_main(const int fd, const int vfd, const std::vector<KeyMap>& maps) -> void {
@@ -57,7 +56,6 @@ auto run(const ConfigFile config) -> int {
 
 constexpr auto usage = R"(usage:
     keyremap list-devices                       : print available devices
-    keyremap print-events {/dev/input/event*}   : show event log of the device
     keyremap run {/path/to/config-file}         : run keyremap with given config file
     keyremap help                               : print this message
 )";
@@ -80,13 +78,6 @@ auto main(const int argc, const char* argv[]) -> int {
             return 1;
         }
         return run(load_config(argv[2]));
-    } else if(command == "print-events") {
-        if(argc != 3) {
-            warn("invalid usage");
-            print(usage);
-            return 1;
-        }
-        return logger(argv[2]);
     } else if(command == "help") {
         print(usage);
         return 1;

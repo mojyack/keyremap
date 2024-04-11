@@ -1,9 +1,9 @@
-#pragma once
+#include <unistd.h>
+
 #include "keycodes.hpp"
 #include "uinput.hpp"
-#include "unistd.h"
 
-inline auto logger(const char* const path) -> int {
+auto view_inputs(const char* const path) -> int {
     const auto fd = unwrap(open_uinput_device(path, false));
 
     auto event = input_event();
@@ -61,4 +61,21 @@ loop:
     goto loop;
 
     return 0;
+}
+
+constexpr auto usage = R"(usage:
+    input-viewer {/dev/input/event*}    :show inputs of the device
+    input-viewer help                   : print this message
+)";
+
+auto main(const int argc, const char* argv[]) -> int {
+    if(argc != 2) {
+        print(usage);
+        return 1;
+    }
+    if(std::string_view(argv[1]) == "help") {
+        print(usage);
+        return 1;
+    }
+    return view_inputs(argv[1]);
 }
