@@ -1,8 +1,16 @@
+#include <thread>
+
 #include <linux/uinput.h>
 #include <unistd.h>
 
 #include "config.hpp"
 #include "uinput.hpp"
+
+struct Device {
+    int                 fd;
+    std::vector<KeyMap> maps;
+    std::thread         worker;
+};
 
 auto input_watcher_main(const int fd, const int vfd, const std::vector<KeyMap>& maps) -> void {
     auto event = input_event();

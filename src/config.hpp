@@ -1,5 +1,16 @@
 #pragma once
-#include "types.hpp"
+#include <string>
+#include <vector>
+
+struct KeyMap {
+    int16_t from;
+    int16_t to;
+};
+
+struct MapConfig {
+    int32_t device;
+    KeyMap  key;
+};
 
 struct ConfigFile {
     std::string              device_name = "Keyremap Virtual Device";
