@@ -1,5 +1,6 @@
+#include <linux/uinput.h>
+
 #include "config.hpp"
-#include "keycodes.hpp"
 #include "util/charconv.hpp"
 #include "util/misc.hpp"
 
@@ -17,31 +18,53 @@ auto load_config(const std::string_view path) -> ConfigFile {
         if(elms[0] == "device") {
             if(elms.size() != 2) {
                 print(line_num, ": invalid line");
-                continue;
+                goto next;
             }
             config.device_name = elms[1];
         } else if(elms[0] == "capture") {
             if(elms.size() != 2) {
                 print(line_num, ": invalid line");
-                continue;
+                goto next;
             }
-            config.captures.emplace_back(elms[1]);
+            config.captures.push_back(Capture{std::string(elms[1]), {}});
         } else if(elms[0] == "map") {
-            if(elms.size() != 4) {
+            if(elms.size() != 8) {
                 print(line_num, ": invalid input");
-                continue;
+                goto next;
             }
-            auto map = MapConfig();
-            if(const auto dev = from_chars<int>(elms[1]); !dev) {
-                print(line_num, ": invalid input");
-                continue;
-            } else {
-                map.device = dev.value();
+            auto elms_int = std::array<uint16_t, 7>();
+            for(auto i = 0; i < 7; i += 1) {
+                if(const auto num = from_chars<int>(elms[i + 1])) {
+                    elms_int[i] = num.value();
+                } else {
+                    print(line_num, ": invalid input");
+                    goto next;
+                }
             }
-            map.key.from = str2code(elms[2]);
-            map.key.to   = str2code(elms[3]);
-            config.maps.emplace_back(map);
+            auto       map        = EventMap();
+            const auto device     = elms_int[0];
+            const auto match_type = elms_int[1];
+            map.match_code        = elms_int[2];
+            map.match_value       = elms_int[3];
+            map.rewrite_code      = elms_int[4];
+            map.rewrite_value     = elms_int[5];
+            map.send_up           = elms_int[6];
+            if(config.captures.size() <= device) {
+                print(line_num, ": no such capture device");
+                goto next;
+            }
+            if(match_type >= EV_CNT) {
+                print(line_num, ": type must be less than ", EV_CNT);
+                goto next;
+            }
+            auto& maps = config.captures[device].maps;
+            if(maps.size() <= match_type) {
+                maps.resize(match_type + 1);
+            }
+            maps[match_type].emplace_back(map);
         }
+    next:
+        continue;
     }
 
     return config;

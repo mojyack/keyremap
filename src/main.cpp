@@ -7,12 +7,12 @@
 #include "uinput.hpp"
 
 struct Device {
-    int                 fd;
-    std::vector<KeyMap> maps;
-    std::thread         worker;
+    int                                fd;
+    std::vector<std::vector<EventMap>> maps;
+    std::thread                        worker;
 };
 
-auto input_watcher_main(const int fd, const int vfd, const std::vector<KeyMap>& maps) -> void {
+auto input_watcher_main(const int fd, const int vfd, const std::vector<std::vector<EventMap>>& maps) -> void {
     auto event = input_event();
 loop:
     if(read(fd, &event, sizeof(event)) != sizeof(event)) {
@@ -20,15 +20,34 @@ loop:
         return;
     }
 
-    if(event.type == EV_KEY) {
-        for(auto& map : maps) {
-            if(event.code == map.from) {
-                event.code = map.to;
-                break;
-            }
-        }
+    if(event.type >= maps.size()) {
+        goto passthrough;
     }
 
+    for(auto& map : maps[event.type]) {
+        if(event.code != map.match_code) {
+            continue;
+        }
+        if(map.match_value != ignore_value && event.value != map.match_value) {
+            continue;
+        }
+        event.type = EV_KEY;
+        event.code = map.rewrite_code;
+        if(map.rewrite_value != ignore_value) {
+            event.value = map.rewrite_value;
+        }
+        if(write(vfd, &event, sizeof(event)) != sizeof(event)) {
+            warn("write() failed: ", errno);
+            return;
+        }
+        if(!map.send_up) {
+            goto loop;
+        }
+        event.value = 0; // release
+        goto passthrough;
+    }
+
+passthrough:
     if(write(vfd, &event, sizeof(event)) != sizeof(event)) {
         warn("write() failed: ", errno);
         return;
@@ -36,20 +55,16 @@ loop:
     goto loop;
 }
 
-auto run(const ConfigFile config) -> int {
+auto run(ConfigFile config) -> int {
     auto device_fds = std::vector<int>();
     auto devices    = std::vector<Device>();
     for(const auto& d : enumerate_devices()) {
         for(auto citer = size_t(0); citer < config.captures.size(); citer += 1) {
-            if(config.captures[citer] == d.name) {
+            auto& capture = config.captures[citer];
+            if(capture.name == d.name) {
                 const auto fd = open_uinput_device(d.file_path.data()).unwrap();
                 device_fds.push_back(fd);
-                auto& dev = devices.emplace_back(Device{.fd = fd});
-                for(auto& m : config.maps) {
-                    if(size_t(m.device) == citer) {
-                        dev.maps.push_back(m.key);
-                    }
-                }
+                devices.emplace_back(Device{.fd = fd, .maps = std::move(capture.maps)});
                 break;
             }
         }
