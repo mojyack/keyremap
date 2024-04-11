@@ -54,7 +54,7 @@ loop:
 }
 
 constexpr auto usage = R"(usage:
-    input-viewer {/dev/input/event*}    :show inputs of the device
+    input-viewer {/dev/input/event*}    : show inputs of the device
     input-viewer help                   : print this message
 )";
 
