@@ -1,12 +1,37 @@
-# "device {device name}"
-# declare name of virtual device
-device "Middle buttonn simulator"
+# "device_name <device_name>"
+# set name of virtual device
+# device_name: name of the virtual device
+device_name "Middle buttonn simulator"
 
-# "capture {device name}"
-# name of event source devices
-capture "TK-FBP043 Series"
-capture "TPPS/2 IBM TrackPoint"
+# "capture_device <device_name>"
+# declare event source device
+# devices are assigned device id starting from 0 in the order they are declared
+# device_name: name of the device
+capture_device "TK-FBP043 Series"
+capture_device "TPPS/2 IBM TrackPoint"
 
-# "map {capture number} {from code} {to code}" 
-# this line means: "if 0th device(i.e. TK-FBP043 Series) emits key_leftalt, convert it to btn_middle"
-map 0 key_leftalt btn_middle
+# for numbers, see https://raw.githubusercontent.com/torvalds/linux/master/include/uapi/linux/input-event-codes.h
+
+# "map <device_id> <type> <code> <value> <new_code> <new_value> <send_up>"
+# map event to keyboard event
+# device_id: capture device id
+# type: event type
+#   1->EV_KEY
+#   2->EV_REL
+#   3->EV_ABS
+#   ...
+# code: event code
+#   see KEY_*
+# value: event value
+#   for EV_KEY, 0->released, 1->pressed, 2->repeated
+#   for EV_REL,EV_ABS raw value
+#   ...
+#   or '-1' to match any value
+# new_code: event code to set
+# new_value: event value to set. or '-1' to keep the original value
+# send_up: key up simulation for non-key devices like EV_REL
+#   0->do not send release event automatically
+#   1->send release event automatically
+
+# this line means: "if 0th device(i.e. TK-FBP043 Series) emits type 1(EV_KEY) code 86(KEY_LEFTALT), convert it to 274(BTN_MIDDLE)"
+map 0 1 86 -1 274 -1 0

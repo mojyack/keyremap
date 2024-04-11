@@ -15,13 +15,13 @@ auto load_config(const std::string_view path) -> ConfigFile {
             continue;
         }
         const auto elms = split_args(line);
-        if(elms[0] == "device") {
+        if(elms[0] == "device_name") {
             if(elms.size() != 2) {
                 print(line_num, ": invalid line");
                 goto next;
             }
             config.device_name = elms[1];
-        } else if(elms[0] == "capture") {
+        } else if(elms[0] == "capture_device") {
             if(elms.size() != 2) {
                 print(line_num, ": invalid line");
                 goto next;
