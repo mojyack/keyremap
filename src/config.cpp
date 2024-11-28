@@ -1,10 +1,12 @@
+#include <array>
+
 #include <linux/uinput.h>
 
 #include "config.hpp"
 #include "util/charconv.hpp"
 #include "util/misc.hpp"
 
-auto load_config(const std::string_view path) -> ConfigFile {
+auto load_config(const char* const path) -> ConfigFile {
     auto config   = ConfigFile();
     auto file     = std::fstream(path);
     auto line     = std::string();

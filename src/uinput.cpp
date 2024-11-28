@@ -1,3 +1,4 @@
+#include <cstring>
 #include <filesystem>
 
 #include <fcntl.h>
@@ -84,7 +85,7 @@ auto configure_virtual_device(const std::span<int> parent_device_fds) -> Result<
     for(const auto pfd : parent_device_fds) {
         const auto events = get_uinput_device_event_bits<0, EV_MAX>(pfd).unwrap();
 
-        auto inherit_all_events = [ fd, pfd, &events ]<int event, size_t max = 0, int setbit = 0>()->void {
+        auto inherit_all_events = [fd, pfd, &events]<int event, size_t max = 0, int setbit = 0>() -> void {
             if(!check_bit(events, event)) {
                 return;
             }

@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -26,4 +27,4 @@ struct ConfigFile {
     std::vector<Capture> captures;
 };
 
-auto load_config(std::string_view path) -> ConfigFile;
+auto load_config(const char* path) -> ConfigFile;
