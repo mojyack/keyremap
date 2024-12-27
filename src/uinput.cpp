@@ -4,19 +4,18 @@
 #include <fcntl.h>
 #include <linux/uinput.h>
 
+#include "macros/unwrap.hpp"
 #include "uinput.hpp"
-#include "util/error.hpp"
+#include "util/fd.hpp"
 
 namespace {
 template <size_t bits>
 constexpr auto bits_to_bytes = (bits - 1) / 8 + 1;
 
 template <int event, size_t max>
-auto get_uinput_device_event_bits(const int fd) -> Result<std::array<std::byte, bits_to_bytes<max>>> {
+auto get_uinput_device_event_bits(const int fd) -> std::optional<std::array<std::byte, bits_to_bytes<max>>> {
     auto result = std::array<std::byte, bits_to_bytes<max>>();
-    if(ioctl(fd, EVIOCGBIT(event, result.size()), result.data()) != result.size()) {
-        return Error(build_string("ioctl() failed: ", errno));
-    }
+    ensure(ioctl(fd, EVIOCGBIT(event, result.size()), result.data()) == result.size(), "ioctl() failed: ", strerror(errno));
     return result;
 }
 
@@ -25,18 +24,12 @@ auto check_bit(const std::array<std::byte, size>& data, const int n) -> bool {
     return (int(data[n / 8]) & (1 << (n % 8))) != 0;
 }
 
-auto get_uinput_device_name(const char* const path) -> Result<std::string> {
-    const auto fd = open(path, O_RDONLY);
-    if(fd == -1) {
-        return Error(build_string("open(", path, ") failed: ", errno));
-    }
-
+auto get_uinput_device_name(const char* const path) -> std::optional<std::string> {
+    const auto fd = FileDescriptor(open(path, O_RDONLY));
+    ensure(fd.as_handle() >= 0, "failed to open ", path, ": ", strerror(errno));
     auto       buf = std::array<char, 256>();
-    const auto len = ioctl(fd, EVIOCGNAME(256), buf.data());
-    if(len <= 0) {
-        return Error(build_string("ioctl() failed: ", errno));
-    }
-
+    const auto len = ioctl(fd.as_handle(), EVIOCGNAME(256), buf.data());
+    ensure(len > 0, "ioctl() failed: ", strerror(errno));
     return std::string(buf.begin(), buf.begin() + len - 1);
 }
 } // namespace
@@ -49,57 +42,50 @@ auto enumerate_devices() -> std::vector<InputDeviceInfo> {
             continue;
         }
 
-        auto path      = build_string("/dev/input/", basename);
-        auto devname_r = get_uinput_device_name(path.data());
-        if(!devname_r) {
-            warn(devname_r.as_error().cstr());
-            continue;
+        const auto path = build_string("/dev/input/", basename);
+        if(auto devname = get_uinput_device_name(path.data())) {
+            result.emplace_back(InputDeviceInfo{std::move(path), std::move(*devname)});
         }
-        auto& devname = devname_r.as_value();
-
-        result.emplace_back(InputDeviceInfo{std::move(path), std::move(devname)});
     }
 
     return result;
 }
 
-auto open_uinput_device(const char* const path, bool grab) -> Result<int> {
-    const auto fd = open(path, O_RDONLY);
-    if(fd == -1) {
-        return Error(build_string("open(", path, ") failed: ", errno));
-    }
+auto open_uinput_device(const char* const path, bool grab) -> std::optional<FileDescriptor> {
+    auto fd = FileDescriptor(open(path, O_RDONLY));
+    ensure(fd.as_handle() >= 0, "failed to open ", path, ": ", strerror(errno));
     if(grab) {
-        if(ioctl(fd, EVIOCGRAB, 1) != 0) {
-            return Error(build_string("ioctl() failed: ", errno));
-        }
+        ensure(ioctl(fd.as_handle(), EVIOCGRAB, 1) == 0, "ioctl() failed: ", strerror(errno));
     }
     return fd;
 }
 
-auto configure_virtual_device(const std::span<int> parent_device_fds) -> Result<int> {
-    const auto fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
-    if(fd == -1) {
-        return Error(build_string("open(/dev/uinput) failed: ", errno));
-    }
-
+auto configure_virtual_device(const std::span<int> parent_device_fds) -> std::optional<FileDescriptor> {
+    auto fd = FileDescriptor(open("/dev/uinput", O_WRONLY | O_NONBLOCK));
+    ensure(fd.as_handle() >= 0, "failed to open /dev/uniput: ", strerror(errno));
     for(const auto pfd : parent_device_fds) {
-        const auto events = get_uinput_device_event_bits<0, EV_MAX>(pfd).unwrap();
+        auto events_oo = get_uinput_device_event_bits<0, EV_MAX>(pfd);
+        unwrap(events, events_oo);
 
-        auto inherit_all_events = [fd, pfd, &events]<int event, size_t max = 0, int setbit = 0>() -> void {
+        const auto inherit_all_events = [&fd, pfd, &events]<int event, size_t max = 0, int setbit = 0>() -> bool {
+            constexpr auto error_value = false;
+
             if(!check_bit(events, event)) {
-                return;
+                return true;
             }
 
-            dynamic_assert(ioctl(fd, UI_SET_EVBIT, event) == 0, "ioctl() failed");
+            ensure_v(ioctl(fd.as_handle(), UI_SET_EVBIT, event) == 0, "ioctl() failed: ", strerror(errno));
 
             if constexpr(max != 0) {
-                const auto keys = get_uinput_device_event_bits<event, max>(pfd).unwrap();
+                auto keys_oo = get_uinput_device_event_bits<event, max>(pfd);
+                unwrap_v(keys, keys_oo);
                 for(auto i = size_t(0); i < max; i += 1) {
                     if(check_bit(keys, i)) {
-                        dynamic_assert(ioctl(fd, setbit, i) == 0, "ioctl() failed");
+                        ensure_v(ioctl(fd.as_handle(), setbit, i) == 0, "ioctl() failed: ", strerror(errno));
                     }
                 }
             }
+            return true;
         };
 
         inherit_all_events.template operator()<EV_SYN>();
@@ -117,7 +103,7 @@ auto configure_virtual_device(const std::span<int> parent_device_fds) -> Result<
     return fd;
 }
 
-auto create_virtual_device(const int fd, const char* const device_name) -> void {
+auto create_virtual_device(const int fd, const char* const device_name) -> bool {
     auto setup = uinput_setup{
         .id = {
             .bustype = BUS_USB,
@@ -129,6 +115,7 @@ auto create_virtual_device(const int fd, const char* const device_name) -> void 
     };
     strncpy(setup.name, device_name, UINPUT_MAX_NAME_SIZE);
 
-    dynamic_assert(ioctl(fd, UI_DEV_SETUP, &setup) == 0, "ioctl() failed");
-    dynamic_assert(ioctl(fd, UI_DEV_CREATE) == 0, "ioctl() failed");
+    ensure(ioctl(fd, UI_DEV_SETUP, &setup) == 1, "ioctl() failed: ", strerror(errno));
+    ensure(ioctl(fd, UI_DEV_CREATE) == 0, "ioctl() failed: ", strerror(errno));
+    return true;
 }

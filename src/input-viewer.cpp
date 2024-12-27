@@ -1,17 +1,15 @@
 #include <linux/uinput.h>
 #include <unistd.h>
 
+#include "macros/unwrap.hpp"
 #include "uinput.hpp"
 
 auto view_inputs(const char* const path) -> int {
-    const auto fd = open_uinput_device(path, false).unwrap();
+    unwrap(fd, open_uinput_device(path, false));
 
     auto event = input_event();
 loop:
-    if(read(fd, &event, sizeof(event)) != sizeof(event)) {
-        warn("read() failed: ", errno);
-        return 1;
-    }
+    ensure(read(fd.as_handle(), &event, sizeof(event)) == sizeof(event));
 
     printf("[%ld.%ld] %d %d %d\n", event.time.tv_sec, event.time.tv_usec, event.type, event.code, event.value);
 

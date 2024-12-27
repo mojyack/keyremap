@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include "config.hpp"
+#include "macros/unwrap.hpp"
 #include "uinput.hpp"
 
 struct Device {
@@ -15,10 +16,7 @@ struct Device {
 auto input_watcher_main(const int fd, const int vfd, const std::vector<std::vector<EventMap>>& maps) -> void {
     auto event = input_event();
 loop:
-    if(read(fd, &event, sizeof(event)) != sizeof(event)) {
-        warn("read() failed: ", errno);
-        return;
-    }
+    ensure(read(fd, &event, sizeof(event)) == sizeof(event), "read() failed: ", strerror(errno));
 
     if(event.type >= maps.size()) {
         goto passthrough;
@@ -36,10 +34,7 @@ loop:
         if(map.rewrite_value != ignore_value) {
             event.value = map.rewrite_value;
         }
-        if(write(vfd, &event, sizeof(event)) != sizeof(event)) {
-            warn("write() failed: ", errno);
-            return;
-        }
+        ensure(write(vfd, &event, sizeof(event)) == sizeof(event), "write() failed: ", strerror(errno));
         if(!map.send_up) {
             goto loop;
         }
@@ -48,10 +43,7 @@ loop:
     }
 
 passthrough:
-    if(write(vfd, &event, sizeof(event)) != sizeof(event)) {
-        warn("write() failed: ", errno);
-        return;
-    }
+    ensure(write(vfd, &event, sizeof(event)) == sizeof(event), "write() failed: ", strerror(errno));
     goto loop;
 }
 
@@ -62,7 +54,8 @@ auto run(ConfigFile config) -> int {
         for(auto citer = size_t(0); citer < config.captures.size(); citer += 1) {
             auto& capture = config.captures[citer];
             if(capture.name == d.name) {
-                const auto fd = open_uinput_device(d.file_path.data()).unwrap();
+                unwrap_mut(handle, open_uinput_device(d.file_path.data()));
+                const auto fd = handle.release();
                 device_fds.push_back(fd);
                 devices.emplace_back(Device{.fd = fd, .maps = std::move(capture.maps)});
                 break;
@@ -71,25 +64,25 @@ auto run(ConfigFile config) -> int {
     }
 
     // create virtual device
-    const auto vdev = configure_virtual_device(device_fds).unwrap();
+    unwrap(vdev, configure_virtual_device(device_fds));
     // virtual device is keyboard
-    dynamic_assert(ioctl(vdev, UI_SET_EVBIT, EV_KEY) == 0, "ioctl() failed");
+    ensure(ioctl(vdev.as_handle(), UI_SET_EVBIT, EV_KEY) == 0, "ioctl() failed: ", strerror(errno));
     // enable all possible keycodes
     for(auto& dev : devices) {
         for(const auto& map : dev.maps) {
             for(const auto& bind : map) {
-                if(ioctl(vdev, UI_SET_KEYBIT, bind.rewrite_code) != 0) {
-                    print("failed to enable keycode ", bind.rewrite_code);
+                if(ioctl(vdev.as_handle(), UI_SET_KEYBIT, bind.rewrite_code) != 0) {
+                    WARN("failed to enable keycode ", bind.rewrite_code);
                 }
             }
         }
     }
     // instantiate virtual device
-    create_virtual_device(vdev, config.device_name.data());
+    ensure(create_virtual_device(vdev.as_handle(), config.device_name.data()));
 
     // start workers
     for(auto& dev : devices) {
-        dev.worker = std::thread(input_watcher_main, dev.fd, vdev, dev.maps);
+        dev.worker = std::thread(input_watcher_main, dev.fd, vdev.as_handle(), dev.maps);
     }
     for(auto& dev : devices) {
         dev.worker.join();
@@ -120,7 +113,8 @@ auto main(const int argc, const char* argv[]) -> int {
             print(usage);
             return 1;
         }
-        return run(load_config(argv[2]));
+        unwrap(config, ConfigFile::from_file(argv[2]));
+        return run(config);
     } else if(command == "help") {
         print(usage);
         return 1;

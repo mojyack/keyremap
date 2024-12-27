@@ -25,6 +25,7 @@ struct Capture {
 struct ConfigFile {
     std::string          device_name = "Keyremap Virtual Device";
     std::vector<Capture> captures;
+
+    static auto from_file(const char* path) -> std::optional<ConfigFile>;
 };
 
-auto load_config(const char* path) -> ConfigFile;
